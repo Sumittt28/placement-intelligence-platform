@@ -10,6 +10,7 @@ from app.api.routes import (
     evaluations,
     resume,
     recommendations,
+    weaknesses,
     readiness,
     knowledge_base,
     voice,
@@ -27,6 +28,7 @@ api_router.include_router(mock_interviews.router, prefix="/interviews", tags=["M
 api_router.include_router(evaluations.router, prefix="/evaluations", tags=["Evaluations"])
 api_router.include_router(resume.router, prefix="/resume", tags=["Resume"])
 api_router.include_router(recommendations.router, prefix="/recommendations", tags=["Recommendations"])
+api_router.include_router(weaknesses.router, prefix="/weaknesses", tags=["Weaknesses"])
 api_router.include_router(readiness.router, prefix="/readiness", tags=["Readiness"])
 api_router.include_router(knowledge_base.router, prefix="/search", tags=["Knowledge Base"])
 api_router.include_router(voice.router, prefix="/voice", tags=["Voice"])

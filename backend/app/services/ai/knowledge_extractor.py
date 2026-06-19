@@ -1,10 +1,19 @@
 import json
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.base import BaseParser
 
 
-class KnowledgeExtractor:
+class KnowledgeExtractor(BaseParser):
     def __init__(self):
         self.client = GeminiClient()
+
+    async def parse(self, raw_input: str) -> dict:
+        """Implements BaseParser interface — delegates to extract with minimal context."""
+        return await self.extract(
+            questions=[{"question_text": raw_input}],
+            role="Software Engineer",
+            company_name="Unknown",
+        )
 
     async def extract(self, questions: list, role: str, company_name: str) -> dict:
         prompt = f"""Analyze these interview questions from {company_name} for the role of {role}.

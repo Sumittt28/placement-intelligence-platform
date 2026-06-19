@@ -1,10 +1,19 @@
 import json
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.base import BaseQuestionGenerator
 
 
-class FollowUpGenerator:
+class FollowUpGenerator(BaseQuestionGenerator):
     def __init__(self):
         self.client = GeminiClient()
+
+    async def generate_question(self, context: dict, **kwargs) -> dict:
+        return await self.generate_followup(
+            context=context,
+            transcript=kwargs.get("transcript", []),
+            interview_type=kwargs.get("interview_type", "technical"),
+            difficulty=kwargs.get("difficulty", "medium"),
+        )
 
     async def generate_followup(
         self, context: dict, transcript: list, interview_type: str, difficulty: str

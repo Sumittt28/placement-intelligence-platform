@@ -1,8 +1,9 @@
 import json
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.base import BaseEvaluator
 
 
-class Evaluator:
+class Evaluator(BaseEvaluator):
     def __init__(self):
         self.client = GeminiClient()
 
@@ -71,6 +72,23 @@ Every reason MUST reference specific answers from the transcript. No generic fee
         result.setdefault("improvements", [])
 
         return result
+
+    async def detect_weaknesses(self, evaluation: dict, interview_type: str) -> list:
+        """Detect weak topics from an evaluation. Returns list of weak dimensions."""
+        weaknesses = []
+        dims = ["communication", "technical", "confidence", "problem_solving", "behavioral", "project"]
+        for dim in dims:
+            dim_data = evaluation.get(dim, {})
+            if isinstance(dim_data, dict) and dim_data.get("score", 10) < 5:
+                weaknesses.append({
+                    "topic": dim,
+                    "category": "technical" if dim in ("technical", "problem_solving") else (
+                        "behavioral" if dim == "behavioral" else "communication"
+                    ),
+                    "score": dim_data["score"],
+                    "reason": dim_data.get("reason", ""),
+                })
+        return weaknesses
 
     async def generate_ideal_answer(self, question: str, interview_type: str) -> str:
         prompt = f"""Generate an ideal interview answer for this question in a {interview_type} interview.

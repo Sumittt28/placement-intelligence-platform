@@ -1,14 +1,17 @@
 import json
 from app.services.ai.gemini_client import GeminiClient
+from app.services.ai.base import BaseQuestionGenerator
 
 
-class InterviewGenerator:
+class InterviewGenerator(BaseQuestionGenerator):
     def __init__(self):
         self.client = GeminiClient()
 
     async def generate_question(
-        self, context: dict, interview_type: str, difficulty: str, previous_questions: list
+        self, context: dict, interview_type: str = "technical", difficulty: str = "medium",
+        previous_questions: list = None,
     ) -> dict:
+        previous_questions = previous_questions or []
         prompt = f"""You are an expert interviewer conducting a {interview_type} interview at {difficulty} difficulty.
 
 Generate the NEXT interview question. The question must be:

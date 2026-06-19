@@ -26,6 +26,19 @@ class Base(DeclarativeBase):
     pass
 
 
+# Context manager factory for Celery tasks (non-generator)
+class async_session_factory:
+    """Async context manager for use in Celery tasks and non-FastAPI contexts."""
+    async def __aenter__(self):
+        self.session = async_session()
+        return self.session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            await self.session.rollback()
+        await self.session.close()
+
+
 async def get_db() -> AsyncSession:
     async with async_session() as session:
         try:
