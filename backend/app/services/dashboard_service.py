@@ -19,23 +19,26 @@ class DashboardService:
             "full_name": profile.full_name if profile else "",
             "batch": profile.batch if profile else None,
             "resume_status": "uploaded" if (profile and profile.resume_url) else "not_uploaded",
-            "target_companies": profile.target_companies if profile else "[]",
+            "target_companies": ", ".join(profile.target_companies) if (profile and profile.target_companies) else "Not set",
         }
 
         # Stats
-        exp_count = await self.db.execute(
+        exp_count_result = await self.db.execute(
             select(func.count(InterviewExperience.id)).where(InterviewExperience.user_id == user_id)
         )
-        mock_count = await self.db.execute(
+        exp_count_val = exp_count_result.scalar() or 0
+
+        mock_count_result = await self.db.execute(
             select(func.count(MockInterview.id)).where(
                 MockInterview.user_id == user_id, MockInterview.status == "completed"
             )
         )
+        mock_count_val = mock_count_result.scalar() or 0
 
         stats = {
-            "interviews_attempted": exp_count.scalar() or 0,
-            "ai_interviews_completed": mock_count.scalar() or 0,
-            "contributions_submitted": exp_count.scalar() or 0,
+            "interviews_attempted": exp_count_val,
+            "ai_interviews_completed": mock_count_val,
+            "contributions_submitted": exp_count_val,
             "company_reports_viewed": 0,
         }
 
