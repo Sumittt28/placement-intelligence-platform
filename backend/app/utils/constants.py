@@ -1,0 +1,8 @@
+ROUND_TYPES = ["OA", "Technical", "HM", "HR", "System Design", "Other"]
+DIFFICULTY_LEVELS = ["Easy", "Medium", "Hard"]
+OUTCOMES = ["Selected", "Rejected", "Waiting", "Unknown"]
+COULD_ANSWER_OPTIONS = ["Yes", "Partially", "No"]
+INTERVIEW_TYPES = ["behavioral", "technical", "hm", "project", "company", "custom"]
+INTERVIEW_MODES = ["text", "voice"]
+INTERVIEW_STATUSES = ["in_progress", "completed", "abandoned"]
+WEAKNESS_SEVERITIES = ["low", "medium", "high"]
