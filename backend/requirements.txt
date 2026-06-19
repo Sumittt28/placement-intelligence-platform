@@ -13,7 +13,7 @@ google-generativeai==0.8.1
 pgvector==0.3.5
 supabase==2.9.1
 gotrue==2.9.2
-openai-whisper==20240930
+# openai-whisper==20240930  # Optional: Install for voice STT (heavy dependency, skip on free tier)
 python-dotenv==1.0.1
 boto3==1.35.19
 celery==5.4.0
