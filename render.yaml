@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: placement-intel-api
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql+asyncpg://postgres.qtfellkffpbiamssfufg:REDACTED_PASSWORD@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
+      - key: SUPABASE_URL
+        value: https://qtfellkffpbiamssfufg.supabase.co
+      - key: SUPABASE_KEY
+        value: REDACTED_SUPABASE_ANON_KEY
+      - key: SUPABASE_SERVICE_KEY
+        value: REDACTED_SUPABASE_SERVICE_KEY
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        value: ""
+      - key: REDIS_URL
+        value: ""
+      - key: CORS_ORIGINS
+        value: https://frontend-sigma-smoky-65.vercel.app,http://localhost:3000
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+    healthCheckPath: /health
