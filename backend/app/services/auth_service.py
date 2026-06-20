@@ -44,12 +44,12 @@ class AuthService:
         self.db.add(user)
         await self.db.flush()
 
-        # Create profile
+        # Create profile (convert empty strings to None for optional unique fields)
         profile = Profile(
             user_id=user.id,
             full_name=request.full_name,
-            kalvium_id=request.kalvium_id,
-            batch=request.batch,
+            kalvium_id=request.kalvium_id if request.kalvium_id else None,
+            batch=request.batch if request.batch else None,
             graduation_year=request.graduation_year,
         )
         self.db.add(profile)

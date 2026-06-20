@@ -26,13 +26,25 @@ export const supabase = getSupabase();
 // Auth helpers
 export const supabaseAuth = {
   signInWithGoogle: async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/login`,
-      },
-    });
-    return { data, error };
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/login`,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) {
+        return { data: null, error };
+      }
+      // Only redirect if we got a valid URL
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+      return { data, error: null };
+    } catch (err) {
+      return { data: null, error: { message: "Google sign-in is not available" } as any };
+    }
   },
 
   signOut: async () => {
