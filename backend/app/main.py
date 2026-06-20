@@ -1,6 +1,7 @@
 import time
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -30,6 +31,34 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+
+# ---------- Validation Error Handler ----------
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    # Build a human-readable message from first error
+    if errors:
+        first = errors[0]
+        field = " -> ".join(str(loc) for loc in first.get("loc", []) if loc != "body")
+        msg = first.get("msg", "Validation error")
+        detail = f"{field}: {msg}" if field else msg
+    else:
+        detail = "Invalid request data"
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "data": None, "error": detail},
+    )
+
+
+# ---------- HTTPException Handler (standardize error format) ----------
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "data": None, "error": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
 
 
 # ---------- Global Exception Handler ----------

@@ -93,10 +93,10 @@ export function InterviewConfig() {
 
           <div className="space-y-1.5">
             <Label>Target Company (optional)</Label>
-            <Select value={config.company_id} onValueChange={(v) => setConfig((p) => ({ ...p, company_id: v }))}>
+            <Select value={config.company_id} onValueChange={(v) => setConfig((p) => ({ ...p, company_id: v === "none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="Any company" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Any Company</SelectItem>
+                <SelectItem value="none">Any Company</SelectItem>
                 {(companies || []).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}

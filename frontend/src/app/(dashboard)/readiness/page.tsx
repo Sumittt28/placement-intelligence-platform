@@ -41,7 +41,7 @@ export default function ReadinessPage() {
 
       {/* Overall Score */}
       <div className="flex justify-center">
-        <ReadinessScore percent={data.overall || 0} label="Overall Readiness" size="lg" />
+        <ReadinessScore percent={data.overall_readiness || 0} label="Overall Readiness" size="lg" />
       </div>
 
       {/* Per-Company Breakdown */}

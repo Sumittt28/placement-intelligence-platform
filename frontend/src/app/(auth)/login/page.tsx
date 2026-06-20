@@ -41,8 +41,8 @@ export default function LoginPage() {
       toast.success("Welcome back!");
       router.push("/dashboard");
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error.response?.data?.error || "Login failed");
+      const error = err as { response?: { data?: { error?: string; detail?: string } } };
+      toast.error(error.response?.data?.detail || error.response?.data?.error || "Login failed");
     } finally {
       setLoading(false);
     }

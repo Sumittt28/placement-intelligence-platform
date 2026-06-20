@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
+import logging
+# Suppress passlib bcrypt version warning (bcrypt 4.x compat)
+logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

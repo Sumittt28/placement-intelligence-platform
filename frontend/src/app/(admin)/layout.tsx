@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,11 +20,14 @@ const adminNav = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loadFromStorage } = useAuthStore();
+  const { user, isAuthenticated, loadFromStorage } = useAuthStore();
+  const [checked, setChecked] = useState(false);
 
-  useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+  useEffect(() => { loadFromStorage(); setChecked(true); }, [loadFromStorage]);
 
   useEffect(() => {
+    if (!checked) return;
+    if (typeof window === "undefined") return;
     const token = localStorage.getItem("token");
     if (!token) { router.push("/login"); return; }
     const userStr = localStorage.getItem("user");
@@ -34,7 +37,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         if (u.role !== "admin") router.push("/dashboard");
       } catch { router.push("/login"); }
     }
-  }, [router]);
+  }, [checked, router]);
+
+  if (!checked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || user?.role !== "admin") {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">

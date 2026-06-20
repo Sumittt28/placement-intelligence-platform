@@ -23,7 +23,8 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
   const transcribeMutation = useMutation({
     mutationFn: async (audioBlob: Blob) => {
       const res = await voiceAPI.transcribe(audioBlob);
-      return res.data.data as string;
+      const data = res.data.data as { text: string } | string;
+      return typeof data === 'string' ? data : data?.text || '';
     },
     onSuccess: (text) => {
       setTranscribedText(text);
@@ -119,7 +120,8 @@ export function useVoiceSynthesizer(): UseVoiceSynthesizerReturn {
   const synthesizeMutation = useMutation({
     mutationFn: async (text: string) => {
       const res = await voiceAPI.synthesize(text);
-      return res.data.data as string; // base64 audio
+      const data = res.data.data as { audio_base64: string } | string;
+      return typeof data === 'string' ? data : data?.audio_base64 || '';
     },
   });
 

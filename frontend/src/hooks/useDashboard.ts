@@ -43,7 +43,7 @@ export function useOverallReadiness() {
     queryFn: async () => {
       const res = await readinessAPI.overall();
       return res.data.data as {
-        overall: number;
+        overall_readiness: number;
         companies: CompanyReadiness[];
       };
     },

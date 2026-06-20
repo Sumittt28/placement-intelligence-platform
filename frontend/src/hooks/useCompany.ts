@@ -51,7 +51,8 @@ export function useKnowledgeBaseSearch(params: {
     queryKey: ["search", params],
     queryFn: async () => {
       const res = await searchAPI.search(params);
-      return res.data.data as SearchResult[];
+      const data = res.data.data as { results: SearchResult[]; total: number; query: string } | SearchResult[];
+      return Array.isArray(data) ? data : data?.results || [];
     },
     enabled: !!params.q && params.q.length >= 2,
     staleTime: 60 * 1000,

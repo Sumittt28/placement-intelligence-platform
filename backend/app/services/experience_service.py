@@ -76,6 +76,13 @@ class ExperienceService:
         except Exception:
             pass
 
+        # Re-fetch with eager loading to avoid lazy load in async context
+        result = await self.db.execute(
+            select(InterviewExperience)
+            .options(selectinload(InterviewExperience.questions))
+            .where(InterviewExperience.id == experience.id)
+        )
+        experience = result.scalar_one()
         return await self._serialize_experience(experience)
 
     async def list_experiences(self, user_id: str, page: int, limit: int) -> dict:
@@ -164,7 +171,12 @@ class ExperienceService:
             company_name = c_result.scalar_one_or_none()
 
         questions = []
-        if hasattr(exp, 'questions') and exp.questions:
+        # Access questions safely (must be eagerly loaded in async context)
+        try:
+            questions_loaded = exp.questions
+        except Exception:
+            questions_loaded = []
+        if questions_loaded:
             questions = [
                 {
                     "id": str(q.id),

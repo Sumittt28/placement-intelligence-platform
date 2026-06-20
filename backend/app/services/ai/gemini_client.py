@@ -6,6 +6,11 @@ from app.services.ai.base import BaseAIService
 
 class GeminiClient(BaseAIService):
     def __init__(self, model: str = "gemini-2.0-flash"):
+        if not settings.GEMINI_API_KEY:
+            import logging
+            logging.getLogger("pip.ai").warning("GEMINI_API_KEY is not set. AI features will return fallback responses.")
+            self.model = None
+            return
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.model = genai.GenerativeModel(
             model,
@@ -15,6 +20,8 @@ class GeminiClient(BaseAIService):
         )
 
     async def generate(self, prompt: str, context: dict = None, temperature: float = 0.5) -> dict:
+        if not self.model:
+            return {"error": "AI service not configured. Set GEMINI_API_KEY in .env"}
         try:
             full_prompt = prompt
             if context:
@@ -41,6 +48,8 @@ class GeminiClient(BaseAIService):
 
     async def generate_text(self, prompt: str, temperature: float = 0.5) -> str:
         """Generate plain text response (not JSON)."""
+        if not self.model:
+            return "AI service not configured. Set GEMINI_API_KEY in .env"
         try:
             model = genai.GenerativeModel("gemini-2.0-flash")
             response = await model.generate_content_async(

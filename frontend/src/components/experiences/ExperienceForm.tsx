@@ -78,8 +78,9 @@ export function ExperienceForm() {
           toast.success("Experience submitted successfully!");
           router.push("/experiences");
         },
-        onError: (err) => {
-          toast.error(`Submission failed: ${(err as Error).message}`);
+        onError: (err: unknown) => {
+          const axiosErr = err as { response?: { data?: { error?: string } } };
+          toast.error(axiosErr.response?.data?.error || "Submission failed");
         },
       }
     );
