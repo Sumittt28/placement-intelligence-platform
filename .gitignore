@@ -3,13 +3,11 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 venv/
-.env
 *.log
 
 # Node
 node_modules/
 .next/
-.env.local
 
 # IDE
 .vscode/
@@ -29,11 +27,19 @@ generate_plan.py
 
 # Pytest
 .pytest_cache/
+test.db
 
-# Backend env
+# ============================================================
+# SECRETS — Never commit these files
+# ============================================================
+.env
+.env.local
+.env.production
+.env.*.local
 backend/.env
+backend/.env.production
 backend/venv/
-
-# Frontend env
 frontend/.env.local
+frontend/.env.production
 frontend/.next/
+frontend/.vercel/

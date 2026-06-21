@@ -15,5 +15,5 @@ async def get_evaluation(
     db: AsyncSession = Depends(get_db),
 ):
     service = MockInterviewService(db)
-    evaluation = await service.get_evaluation(interview_id)
+    evaluation = await service.get_evaluation(interview_id, user_id=current_user["sub"])
     return APIResponse(data=evaluation)

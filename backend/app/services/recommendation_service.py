@@ -68,9 +68,11 @@ class RecommendationService:
                 resume_result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == user_id))
                 resume = resume_result.scalar_one_or_none()
                 if resume:
-                    recs = await engine.generate(
-                        skills=resume.skills or [],
-                        technologies=resume.technologies or [],
+                    recs = await engine.generate_recommendations(
+                        resume_data={
+                            "skills": resume.skills or [],
+                            "technologies": resume.technologies or [],
+                        },
                     )
                     for i, r in enumerate(recs[:5]):
                         rec = Recommendation(

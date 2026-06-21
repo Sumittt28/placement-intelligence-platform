@@ -1,4 +1,6 @@
 import uuid
+import asyncio
+import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,6 +11,8 @@ from app.models.intelligence import ResumeData, Weakness
 from app.models.company import CompanyAnalytics
 from app.schemas.mock_interview import StartInterviewRequest, SubmitAnswerRequest
 from app.schemas.evaluation import EvaluationResponse
+
+logger = logging.getLogger("pip.interviews")
 
 
 class MockInterviewService:
@@ -171,15 +175,27 @@ class MockInterviewService:
         )
         self.db.add(evaluation)
 
-        # Generate ideal answers for each question
-        from app.services.ai.evaluator import Evaluator as EvalService
-        for q in interview.questions:
-            if q.student_answer:
-                try:
-                    ideal = await evaluator.generate_ideal_answer(q.question_text, interview.interview_type)
-                    q.ideal_answer = ideal
-                except Exception:
-                    pass
+        # Generate ideal answers in parallel (with timeout protection)
+        try:
+            questions_needing_ideals = [q for q in interview.questions if q.student_answer]
+            if questions_needing_ideals:
+                async def _gen_ideal(q):
+                    try:
+                        return q, await evaluator.generate_ideal_answer(q.question_text, interview.interview_type)
+                    except Exception:
+                        return q, None
+
+                results = await asyncio.wait_for(
+                    asyncio.gather(*[_gen_ideal(q) for q in questions_needing_ideals]),
+                    timeout=60,  # Total timeout for all ideal answers
+                )
+                for q, ideal in results:
+                    if ideal:
+                        q.ideal_answer = ideal
+        except asyncio.TimeoutError:
+            logger.warning(f"Ideal answer generation timed out for interview {interview_id}")
+        except Exception as e:
+            logger.warning(f"Ideal answer generation failed for interview {interview_id}: {e}")
 
         await self.db.flush()
 
@@ -212,12 +228,15 @@ class MockInterviewService:
             for i in interviews
         ]
 
-    async def get_interview(self, interview_id: str) -> dict:
-        result = await self.db.execute(
+    async def get_interview(self, interview_id: str, user_id: str = None) -> dict:
+        query = (
             select(MockInterview)
             .options(selectinload(MockInterview.questions))
             .where(MockInterview.id == interview_id)
         )
+        if user_id:
+            query = query.where(MockInterview.user_id == user_id)
+        result = await self.db.execute(query)
         interview = result.scalar_one_or_none()
         if not interview:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
@@ -243,12 +262,15 @@ class MockInterviewService:
             ],
         }
 
-    async def get_replay(self, interview_id: str) -> dict:
-        result = await self.db.execute(
+    async def get_replay(self, interview_id: str, user_id: str = None) -> dict:
+        query = (
             select(MockInterview)
             .options(selectinload(MockInterview.questions), selectinload(MockInterview.evaluation))
             .where(MockInterview.id == interview_id)
         )
+        if user_id:
+            query = query.where(MockInterview.user_id == user_id)
+        result = await self.db.execute(query)
         interview = result.scalar_one_or_none()
         if not interview:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
@@ -285,10 +307,16 @@ class MockInterviewService:
             "evaluation": eval_data,
         }
 
-    async def get_evaluation(self, interview_id: str) -> dict:
-        result = await self.db.execute(
-            select(Evaluation).where(Evaluation.interview_id == interview_id)
-        )
+    async def get_evaluation(self, interview_id: str, user_id: str = None) -> dict:
+        query = select(Evaluation).where(Evaluation.interview_id == interview_id)
+        if user_id:
+            # Join to verify ownership
+            query = (
+                select(Evaluation)
+                .join(MockInterview, Evaluation.interview_id == MockInterview.id)
+                .where(Evaluation.interview_id == interview_id, MockInterview.user_id == user_id)
+            )
+        result = await self.db.execute(query)
         evaluation = result.scalar_one_or_none()
         if not evaluation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found")

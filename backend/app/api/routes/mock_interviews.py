@@ -60,7 +60,7 @@ async def get_interview(
     db: AsyncSession = Depends(get_db),
 ):
     service = MockInterviewService(db)
-    interview = await service.get_interview(interview_id)
+    interview = await service.get_interview(interview_id, user_id=current_user["sub"])
     return APIResponse(data=interview)
 
 
@@ -71,5 +71,5 @@ async def get_replay(
     db: AsyncSession = Depends(get_db),
 ):
     service = MockInterviewService(db)
-    replay = await service.get_replay(interview_id)
+    replay = await service.get_replay(interview_id, user_id=current_user["sub"])
     return APIResponse(data=replay)
