@@ -11,6 +11,7 @@ from app.models.intelligence import ResumeData, Weakness
 from app.models.company import CompanyAnalytics
 from app.schemas.mock_interview import StartInterviewRequest, SubmitAnswerRequest
 from app.schemas.evaluation import EvaluationResponse
+from app.utils.cache import ttl_cache
 
 logger = logging.getLogger("pip.interviews")
 
@@ -204,6 +205,10 @@ class MockInterviewService:
             await self._detect_weaknesses(user_id, interview.id, eval_data)
         except Exception:
             pass
+
+        # Invalidate caches after interview completion
+        ttl_cache.delete(f"dashboard:{user_id}")
+        ttl_cache.delete(f"readiness:{user_id}")
 
         return EvaluationResponse.from_db(evaluation).model_dump()
 

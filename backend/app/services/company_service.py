@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from app.models.company import Company, CompanyAnalytics
 from app.models.interview_experience import InterviewExperience, InterviewQuestion
 from app.schemas.company import CompanyCreate, CompanyUpdate
+from app.utils.cache import ttl_cache
 
 
 class CompanyService:
@@ -20,7 +21,7 @@ class CompanyService:
         result = await self.db.execute(query)
         companies = result.scalars().all()
 
-        return [
+        result_list = [
             {
                 "id": str(c.id),
                 "name": c.name,
@@ -33,8 +34,16 @@ class CompanyService:
             }
             for c in companies
         ]
+        ttl_cache.set(cache_key, result_list, ttl=300)
+        return result_list
 
     async def get_company_intelligence(self, company_id: str) -> dict:
+        # Cache company intelligence for 3 minutes
+        cache_key = f"company:intel:{company_id}"
+        cached = ttl_cache.get(cache_key)
+        if cached:
+            return cached
+
         result = await self.db.execute(select(Company).where(Company.id == company_id))
         company = result.scalar_one_or_none()
         if not company:
@@ -87,7 +96,7 @@ class CompanyService:
                 questions_by_round[round_type] = []
             questions_by_round[round_type].append({"question": q_text, "topic": topic})
 
-        return {
+        intel_result = {
             "company": {
                 "id": str(company.id),
                 "name": company.name,
@@ -122,6 +131,8 @@ class CompanyService:
             "frequently_asked_questions": faqs,
             "questions_by_round": questions_by_round,
         }
+        ttl_cache.set(cache_key, intel_result, ttl=180)
+        return intel_result
 
     async def create_company(self, request: CompanyCreate) -> dict:
         company = Company(**request.model_dump())
@@ -131,6 +142,9 @@ class CompanyService:
         analytics = CompanyAnalytics(company_id=company.id)
         self.db.add(analytics)
         await self.db.flush()
+
+        # Invalidate company list cache
+        ttl_cache.invalidate_prefix("companies:list:")
 
         return {"id": str(company.id), "name": company.name, "created_at": company.created_at.isoformat()}
 
@@ -143,6 +157,10 @@ class CompanyService:
         for key, value in request.model_dump(exclude_unset=True).items():
             setattr(company, key, value)
         await self.db.flush()
+
+        # Invalidate caches
+        ttl_cache.invalidate_prefix("companies:list:")
+        ttl_cache.delete(f"company:intel:{company_id}")
 
         return {"id": str(company.id), "name": company.name, "updated": True}
 

@@ -97,4 +97,10 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": settings.APP_NAME, "version": "1.0.0"}
+    from app.utils.cache import ttl_cache
+    return {
+        "status": "healthy",
+        "service": settings.APP_NAME,
+        "version": "1.0.0",
+        "cache_size": ttl_cache.size,
+    }

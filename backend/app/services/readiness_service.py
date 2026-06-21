@@ -5,6 +5,7 @@ from app.models.mock_interview import Evaluation, MockInterview
 from app.models.company import Company, CompanyAnalytics
 from app.models.intelligence import Weakness
 from app.models.user import Profile
+from app.utils.cache import ttl_cache
 import json
 
 
@@ -13,6 +14,12 @@ class ReadinessService:
         self.db = db
 
     async def get_overall_readiness(self, user_id: str) -> dict:
+        # Cache readiness for 2 minutes
+        cache_key = f"readiness:{user_id}"
+        cached = ttl_cache.get(cache_key)
+        if cached:
+            return cached
+
         # Get target companies from profile
         profile_result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
         profile = profile_result.scalar_one_or_none()
@@ -37,10 +44,12 @@ class ReadinessService:
             except Exception:
                 pass
 
-        return {
+        result = {
             "overall_readiness": round(overall, 1),
             "companies": companies,
         }
+        ttl_cache.set(cache_key, result, ttl=120)
+        return result
 
     async def get_company_readiness(self, user_id: str, company_id: str) -> dict:
         # Get company

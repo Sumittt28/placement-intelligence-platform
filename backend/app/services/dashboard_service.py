@@ -4,6 +4,7 @@ from app.models.user import User, Profile
 from app.models.interview_experience import InterviewExperience
 from app.models.mock_interview import MockInterview, Evaluation
 from app.models.intelligence import ActivityLog
+from app.utils.cache import ttl_cache
 
 
 class DashboardService:
@@ -11,6 +12,11 @@ class DashboardService:
         self.db = db
 
     async def get_dashboard_data(self, user_id: str) -> dict:
+        # Check cache first (60 second TTL)
+        cache_key = f"dashboard:{user_id}"
+        cached = ttl_cache.get(cache_key)
+        if cached:
+            return cached
         # Profile summary
         profile_result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
         profile = profile_result.scalar_one_or_none()
@@ -93,13 +99,15 @@ class DashboardService:
                 },
             })
 
-        return {
+        result = {
             "profile_summary": profile_summary,
             "stats": stats,
             "recent_activity": recent_activity,
             "performance": performance,
             "trends": trends,
         }
+        ttl_cache.set(cache_key, result, ttl=60)
+        return result
 
     async def get_platform_analytics(self) -> dict:
         """Admin-only platform-wide analytics."""
