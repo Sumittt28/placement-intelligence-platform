@@ -14,6 +14,12 @@ class CompanyService:
         self.db = db
 
     async def list_companies(self, search: str = None) -> list:
+        # Cache company list for 5 minutes
+        cache_key = f"companies:list:{search or 'all'}"
+        cached = ttl_cache.get(cache_key)
+        if cached:
+            return cached
+
         query = select(Company).where(Company.is_active == True)
         if search:
             query = query.where(Company.name.ilike(f"%{search}%"))
