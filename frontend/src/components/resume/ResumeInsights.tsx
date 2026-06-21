@@ -21,6 +21,16 @@ export function ResumeInsights({ data }: ResumeInsightsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {(data.skills?.length || 0) === 0 && (data.technologies?.length || 0) === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground">
+                No skills extracted yet. This can happen if the AI service is temporarily unavailable.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Try re-uploading your resume, or check back later.
+              </p>
+            </div>
+          ) : (
           <div className="flex flex-wrap gap-2">
             {(data.skills || []).map((s, i) => (
               <Badge key={i} variant="default">{s}</Badge>
@@ -29,6 +39,7 @@ export function ResumeInsights({ data }: ResumeInsightsProps) {
               <Badge key={`t-${i}`} variant="secondary">{t}</Badge>
             ))}
           </div>
+          )}
           {data.domains && data.domains.length > 0 && (
             <div className="mt-3">
               <p className="text-xs text-muted-foreground mb-1">Domains</p>

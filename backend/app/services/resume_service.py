@@ -27,8 +27,15 @@ class ResumeService:
 
         # AI parse
         from app.services.ai.resume_parser import ResumeParser
+        import logging
+        logger = logging.getLogger("pip.resume")
         parser = ResumeParser()
         parsed = await parser.parse(text)
+
+        # Check if AI parsing actually returned data
+        if parsed.get("error"):
+            logger.warning(f"AI resume parsing failed: {parsed['error']}")
+            # Still save the raw text so user can retry later
 
         # Upsert resume data
         result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == user_id))

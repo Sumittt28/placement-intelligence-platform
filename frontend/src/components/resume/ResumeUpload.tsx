@@ -15,8 +15,14 @@ export function ResumeUpload() {
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => resumeAPI.upload(file),
-    onSuccess: () => {
-      toast.success("Resume uploaded and parsed successfully!");
+    onSuccess: (res) => {
+      const data = res.data?.data;
+      const hasSkills = data?.skills?.length > 0 || data?.technologies?.length > 0;
+      if (hasSkills) {
+        toast.success("Resume uploaded and parsed successfully!");
+      } else {
+        toast.warning("Resume uploaded but AI parsing returned no skills. The AI service may be temporarily unavailable. Try again later.");
+      }
       queryClient.invalidateQueries({ queryKey: ["resumeInsights"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["currentUser"] });

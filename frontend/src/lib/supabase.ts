@@ -35,6 +35,11 @@ export const supabaseAuth = {
         },
       });
       if (error) {
+        // Check for "provider not enabled" error
+        const msg = error.message || "";
+        if (msg.includes("provider") || msg.includes("not enabled") || msg.includes("Unsupported")) {
+          return { data: null, error: { message: "Google sign-in is not configured yet. Please use email/password login." } as any };
+        }
         return { data: null, error };
       }
       // Only redirect if we got a valid URL
@@ -43,7 +48,7 @@ export const supabaseAuth = {
       }
       return { data, error: null };
     } catch (err) {
-      return { data: null, error: { message: "Google sign-in is not available" } as any };
+      return { data: null, error: { message: "Google sign-in is not available. Please use email/password login." } as any };
     }
   },
 
