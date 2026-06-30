@@ -38,7 +38,8 @@ export function InterviewConfig() {
       },
       {
         onSuccess: (res) => {
-          const interviewId = res.data.data?.interview_id;
+          const data = res.data.data as { interview_id: string } | null;
+          const interviewId = data?.interview_id;
           if (interviewId) {
             router.push(`/interviews/${interviewId}`);
           }

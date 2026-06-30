@@ -35,7 +35,7 @@ export function ProfileSummary({ fullName, batch, resumeStatus, targetCompanies 
           <span className="text-sm text-muted-foreground flex items-center gap-1">
             <FileText className="h-3 w-3" /> Resume
           </span>
-          <Badge variant={resumeStatus === "Uploaded" ? "default" : "secondary"}>
+          <Badge variant={resumeStatus === "uploaded" ? "default" : "secondary"}>
             {resumeStatus}
           </Badge>
         </div>

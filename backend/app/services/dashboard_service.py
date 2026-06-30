@@ -5,6 +5,7 @@ from app.models.interview_experience import InterviewExperience
 from app.models.mock_interview import MockInterview, Evaluation
 from app.models.intelligence import ActivityLog
 from app.utils.cache import ttl_cache
+from app.utils.helpers import to_uuid
 
 
 class DashboardService:
@@ -17,26 +18,35 @@ class DashboardService:
         cached = ttl_cache.get(cache_key)
         if cached:
             return cached
+        uid = to_uuid(user_id)
         # Profile summary
-        profile_result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
+        profile_result = await self.db.execute(select(Profile).where(Profile.user_id == uid))
         profile = profile_result.scalar_one_or_none()
+
+        target_companies_str = "Not set"
+        if profile and profile.target_companies:
+            tc = profile.target_companies
+            if isinstance(tc, list):
+                target_companies_str = ", ".join(str(c) for c in tc) if tc else "Not set"
+            elif isinstance(tc, str):
+                target_companies_str = tc
 
         profile_summary = {
             "full_name": profile.full_name if profile else "",
             "batch": profile.batch if profile else None,
             "resume_status": "uploaded" if (profile and profile.resume_url) else "not_uploaded",
-            "target_companies": ", ".join(profile.target_companies) if (profile and profile.target_companies) else "Not set",
+            "target_companies": target_companies_str,
         }
 
         # Stats
         exp_count_result = await self.db.execute(
-            select(func.count(InterviewExperience.id)).where(InterviewExperience.user_id == user_id)
+            select(func.count(InterviewExperience.id)).where(InterviewExperience.user_id == uid)
         )
         exp_count_val = exp_count_result.scalar() or 0
 
         mock_count_result = await self.db.execute(
             select(func.count(MockInterview.id)).where(
-                MockInterview.user_id == user_id, MockInterview.status == "completed"
+                MockInterview.user_id == uid, MockInterview.status == "completed"
             )
         )
         mock_count_val = mock_count_result.scalar() or 0
@@ -51,7 +61,7 @@ class DashboardService:
         # Recent activity
         activity_result = await self.db.execute(
             select(ActivityLog)
-            .where(ActivityLog.user_id == user_id)
+            .where(ActivityLog.user_id == uid)
             .order_by(ActivityLog.created_at.desc())
             .limit(10)
         )
@@ -70,7 +80,7 @@ class DashboardService:
         eval_result = await self.db.execute(
             select(Evaluation)
             .join(MockInterview)
-            .where(MockInterview.user_id == user_id)
+            .where(MockInterview.user_id == uid)
             .order_by(Evaluation.created_at.desc())
             .limit(20)
         )

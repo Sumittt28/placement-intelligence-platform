@@ -1,4 +1,3 @@
-import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
@@ -105,7 +104,7 @@ class AuthService:
     async def google_auth(self, request: GoogleAuthRequest) -> dict:
         # Verify Google token via HTTP call
         import httpx
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 "https://www.googleapis.com/oauth2/v3/userinfo",
                 headers={"Authorization": f"Bearer {request.access_token}"},
@@ -115,7 +114,9 @@ class AuthService:
             google_user = resp.json()
 
         email = google_user.get("email")
-        name = google_user.get("name", email.split("@")[0])
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google account has no email")
+        name = google_user.get("name") or email.split("@")[0]
 
         # Find or create user
         result = await self.db.execute(select(User).where(User.email == email))

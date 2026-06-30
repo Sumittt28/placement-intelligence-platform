@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -9,6 +9,8 @@ class ScoreDimension(BaseModel):
 
 
 class EvaluationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     interview_id: str
     communication: ScoreDimension
@@ -22,9 +24,6 @@ class EvaluationResponse(BaseModel):
     strengths: List[str] = []
     improvements: List[str] = []
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
     @classmethod
     def from_db(cls, eval_obj):

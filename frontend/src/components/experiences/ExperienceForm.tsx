@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QuestionEntry } from "./QuestionEntry";
 import { useSubmitExperience } from "@/hooks/useInterview";
+import { useCompanyList } from "@/hooks/useCompany";
 import { Plus, Send } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ interface QuestionData {
 export function ExperienceForm() {
   const router = useRouter();
   const submitMutation = useSubmitExperience();
+  const { data: companies } = useCompanyList();
 
   const [form, setForm] = useState({
     company_id: "",
@@ -60,7 +62,7 @@ export function ExperienceForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.role || !form.interview_date || !form.round_type || !form.difficulty || !form.outcome) {
+    if (!form.company_id || !form.role || !form.interview_date || !form.round_type || !form.difficulty || !form.outcome) {
       toast.error("Please fill in all required fields.");
       return;
     }
@@ -95,6 +97,17 @@ export function ExperienceForm() {
         <CardContent className="space-y-6">
           {/* Basic Info */}
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Company *</Label>
+              <Select value={form.company_id} onValueChange={(v) => handleFieldChange("company_id", v)}>
+                <SelectTrigger><SelectValue placeholder="Select company" /></SelectTrigger>
+                <SelectContent>
+                  {(companies || []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>Role *</Label>
               <Input

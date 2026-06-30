@@ -6,6 +6,7 @@ from app.models.company import Company, CompanyAnalytics
 from app.models.intelligence import Weakness
 from app.models.user import Profile
 from app.utils.cache import ttl_cache
+from app.utils.helpers import to_uuid
 import json
 
 
@@ -20,24 +21,35 @@ class ReadinessService:
         if cached:
             return cached
 
+        uid = to_uuid(user_id)
         # Get target companies from profile
-        profile_result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
+        profile_result = await self.db.execute(select(Profile).where(Profile.user_id == uid))
         profile = profile_result.scalar_one_or_none()
 
-        target_ids = []
+        target_company_names = []
         if profile and profile.target_companies:
             try:
                 targets = json.loads(profile.target_companies) if isinstance(profile.target_companies, str) else profile.target_companies
-                target_ids = targets if isinstance(targets, list) else []
+                target_company_names = targets if isinstance(targets, list) else []
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        # Resolve company names to IDs
+        target_ids = []
+        for name in target_company_names[:5]:
+            company_result = await self.db.execute(
+                select(Company).where(Company.name.ilike(str(name).strip()))
+            )
+            company = company_result.scalar_one_or_none()
+            if company:
+                target_ids.append(str(company.id))
+
         # Get avg scores
-        avg_scores = await self._get_avg_scores(user_id)
+        avg_scores = await self._get_avg_scores(uid)
         overall = sum(avg_scores.values()) / len(avg_scores) * 10 if avg_scores and any(avg_scores.values()) else 0
 
         companies = []
-        for company_id in target_ids[:5]:
+        for company_id in target_ids:
             try:
                 readiness = await self.get_company_readiness(user_id, company_id)
                 companies.append(readiness)
@@ -52,24 +64,26 @@ class ReadinessService:
         return result
 
     async def get_company_readiness(self, user_id: str, company_id: str) -> dict:
+        uid = to_uuid(user_id)
+        cid = to_uuid(company_id)
         # Get company
-        company_result = await self.db.execute(select(Company).where(Company.id == company_id))
+        company_result = await self.db.execute(select(Company).where(Company.id == cid))
         company = company_result.scalar_one_or_none()
         if not company:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
         # Get student's avg scores
-        avg_scores = await self._get_avg_scores(user_id)
+        avg_scores = await self._get_avg_scores(uid)
 
         # Get company requirements (from analytics)
         analytics_result = await self.db.execute(
-            select(CompanyAnalytics).where(CompanyAnalytics.company_id == company_id)
+            select(CompanyAnalytics).where(CompanyAnalytics.company_id == cid)
         )
         analytics = analytics_result.scalar_one_or_none()
 
         # Get active weaknesses
         weakness_result = await self.db.execute(
-            select(Weakness).where(Weakness.user_id == user_id, Weakness.is_resolved == False)
+            select(Weakness).where(Weakness.user_id == uid, Weakness.is_resolved.is_(False))
         )
         weaknesses = weakness_result.scalars().all()
         weak_topics = {w.topic for w in weaknesses}
@@ -115,7 +129,7 @@ class ReadinessService:
         eval_result = await self.db.execute(
             select(Evaluation)
             .join(MockInterview)
-            .where(MockInterview.user_id == user_id)
+            .where(MockInterview.user_id == user_id)  # user_id already a UUID here
             .order_by(Evaluation.created_at.desc())
             .limit(10)
         )

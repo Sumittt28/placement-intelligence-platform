@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -14,6 +14,8 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     full_name: str
@@ -27,17 +29,13 @@ class ProfileResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     email: str
     auth_provider: str
     is_active: bool
     created_at: datetime
     profile: Optional[ProfileResponse] = None
-
-    class Config:
-        from_attributes = True

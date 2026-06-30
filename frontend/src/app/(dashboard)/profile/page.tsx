@@ -13,13 +13,37 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["profile"],
-    queryFn: async () => { const res = await userAPI.getMe(); return res.data.data; },
+    queryFn: async () => {
+      const res = await userAPI.getMe();
+      return res.data.data as {
+        email: string;
+        auth_provider: string;
+        created_at: string;
+        profile: {
+          full_name: string;
+          kalvium_id: string;
+          batch: string;
+          graduation_year: number;
+          linkedin_url: string;
+          github_url: string;
+        } | null;
+      };
+    },
   });
 
   const { register, handleSubmit, reset } = useForm();
 
   const mutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => userAPI.updateProfile(data),
+    mutationFn: (data: Record<string, unknown>) => {
+      // Coerce graduation_year to number
+      if (data.graduation_year !== undefined && data.graduation_year !== "") {
+        const num = Number(data.graduation_year);
+        data.graduation_year = isNaN(num) ? undefined : num;
+      } else {
+        delete data.graduation_year;
+      }
+      return userAPI.updateProfile(data);
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["profile"] }); toast.success("Profile updated!"); },
     onError: () => toast.error("Update failed"),
   });

@@ -64,6 +64,9 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
     }
   }, []);
 
+  const transcribeMutationRef = useRef(transcribeMutation);
+  transcribeMutationRef.current = transcribeMutation;
+
   const stopRecording = useCallback(async (): Promise<Blob | null> => {
     return new Promise((resolve) => {
       const mediaRecorder = mediaRecorderRef.current;
@@ -83,7 +86,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 
         // Transcribe
         if (audioBlob.size > 0) {
-          transcribeMutation.mutate(audioBlob);
+          transcribeMutationRef.current.mutate(audioBlob);
           resolve(audioBlob);
         } else {
           resolve(null);
@@ -92,7 +95,7 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 
       mediaRecorder.stop();
     });
-  }, [transcribeMutation]);
+  }, []); // stable — uses ref to avoid stale closure
 
   return {
     isRecording,
@@ -125,11 +128,14 @@ export function useVoiceSynthesizer(): UseVoiceSynthesizerReturn {
     },
   });
 
+  const synthesizeMutationRef = useRef(synthesizeMutation);
+  synthesizeMutationRef.current = synthesizeMutation;
+
   const synthesizeAndPlay = useCallback(
     async (text: string) => {
       try {
         setError(null);
-        const base64Audio = await synthesizeMutation.mutateAsync(text);
+        const base64Audio = await synthesizeMutationRef.current.mutateAsync(text);
 
         if (!base64Audio) {
           setError("Voice synthesis unavailable. Reading text instead.");
@@ -164,7 +170,7 @@ export function useVoiceSynthesizer(): UseVoiceSynthesizerReturn {
         console.error("Synthesis error:", err);
       }
     },
-    [synthesizeMutation]
+    [] // stable — uses ref to avoid stale closure
   );
 
   const stop = useCallback(() => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useVoiceRecorder } from "@/hooks/useVoice";
 import { Mic, MicOff, Loader2 } from "lucide-react";
@@ -11,11 +12,15 @@ interface VoiceRecorderProps {
 export function VoiceRecorder({ onTranscript }: VoiceRecorderProps) {
   const { isRecording, isTranscribing, startRecording, stopRecording, transcribedText, error } =
     useVoiceRecorder();
+  const prevTranscriptRef = useRef("");
 
-  // When we get a transcript, pass it up
-  if (transcribedText) {
-    onTranscript(transcribedText);
-  }
+  // Pass transcribed text to parent via useEffect (prevents infinite re-renders)
+  useEffect(() => {
+    if (transcribedText && transcribedText !== prevTranscriptRef.current) {
+      prevTranscriptRef.current = transcribedText;
+      onTranscript(transcribedText);
+    }
+  }, [transcribedText, onTranscript]);
 
   const handleToggle = async () => {
     if (isRecording) {

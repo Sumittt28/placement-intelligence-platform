@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.core.security import get_current_user
 from app.schemas.common import APIResponse
 from app.models.intelligence import Weakness
+from app.utils.helpers import to_uuid
 
 router = APIRouter()
 
@@ -16,9 +17,10 @@ async def get_weaknesses(
     db: AsyncSession = Depends(get_db),
 ):
     """Get all weaknesses for the current user."""
+    uid = to_uuid(current_user["sub"])
     result = await db.execute(
         select(Weakness)
-        .where(Weakness.user_id == current_user["sub"])
+        .where(Weakness.user_id == uid)
         .order_by(Weakness.last_detected.desc())
     )
     weaknesses = result.scalars().all()
@@ -47,10 +49,11 @@ async def resolve_weakness(
     db: AsyncSession = Depends(get_db),
 ):
     """Mark a weakness as resolved."""
+    uid = to_uuid(current_user["sub"])
     result = await db.execute(
         select(Weakness).where(
-            Weakness.id == weakness_id,
-            Weakness.user_id == current_user["sub"],
+            Weakness.id == to_uuid(weakness_id),
+            Weakness.user_id == uid,
         )
     )
     weakness = result.scalar_one_or_none()

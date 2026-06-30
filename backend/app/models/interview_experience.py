@@ -21,6 +21,7 @@ class InterviewExperience(Base):
     ai_extracted = Column(JSONB, nullable=True)            # AI-generated structured metadata
     is_approved = Column(Boolean, default=False)
     is_flagged = Column(Boolean, default=False)
+    flag_reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

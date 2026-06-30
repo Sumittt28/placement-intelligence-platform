@@ -13,9 +13,12 @@ router = APIRouter()
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
     service = AuthService(db)
     result = await service.register(request)
-    # Log activity
-    from app.middleware.activity_logger import log_activity
-    await log_activity(db, result["user"]["id"], "user_registered", "auth")
+    # Log activity (best-effort — must not break registration)
+    try:
+        from app.middleware.activity_logger import log_activity
+        await log_activity(db, result["user"]["id"], "user_registered", "auth")
+    except Exception:
+        pass  # Activity logging failure must never roll back auth
     return APIResponse(data=result)
 
 
@@ -23,8 +26,12 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     service = AuthService(db)
     result = await service.login(request)
-    from app.middleware.activity_logger import log_activity
-    await log_activity(db, result["user"]["id"], "user_logged_in", "auth")
+    # Log activity (best-effort — must not break login)
+    try:
+        from app.middleware.activity_logger import log_activity
+        await log_activity(db, result["user"]["id"], "user_logged_in", "auth")
+    except Exception:
+        pass
     return APIResponse(data=result)
 
 

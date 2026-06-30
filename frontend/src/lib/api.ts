@@ -26,7 +26,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = "/login";
+      // Avoid redirect loop if already on login/register page
+      if (!window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/register")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }
@@ -66,6 +69,7 @@ export const experienceAPI = {
   create: (data: Record<string, unknown>) => api.post<APIResponse>("/experiences", data),
   list: (page = 1, limit = 20) => api.get<APIResponse>("/experiences", { params: { page, limit } }),
   get: (id: string) => api.get<APIResponse>(`/experiences/${id}`),
+  update: (id: string, data: Record<string, unknown>) => api.put<APIResponse>(`/experiences/${id}`, data),
   delete: (id: string) => api.delete<APIResponse>(`/experiences/${id}`),
 };
 

@@ -6,12 +6,18 @@ import { SearchResults } from "@/components/search/SearchResults";
 import { useKnowledgeBaseSearch } from "@/hooks/useCompany";
 
 export default function SearchPage() {
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    q: string;
+    type?: string;
+    company?: string;
+    round_type?: string;
+    difficulty?: string;
+  }>({
     q: "",
-    type: undefined as string | undefined,
-    company: undefined as string | undefined,
-    round_type: undefined as string | undefined,
-    difficulty: undefined as string | undefined,
+    type: undefined,
+    company: undefined,
+    round_type: undefined,
+    difficulty: undefined,
   });
 
   const { data: results, isLoading } = useKnowledgeBaseSearch(filters);

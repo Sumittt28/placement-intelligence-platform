@@ -3,6 +3,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, status, UploadFile
 from app.models.intelligence import ResumeData
 from app.models.user import Profile
+from app.utils.helpers import to_uuid
 
 
 class ResumeService:
@@ -10,11 +11,12 @@ class ResumeService:
         self.db = db
 
     async def upload_and_parse(self, user_id: str, file: UploadFile) -> dict:
+        uid = to_uuid(user_id)
         # Read file content
         content = await file.read()
         text = ""
 
-        if file.filename.endswith(".pdf"):
+        if (file.filename or "").lower().endswith(".pdf"):
             try:
                 import io
                 from pypdf import PdfReader
@@ -38,11 +40,11 @@ class ResumeService:
             # Still save the raw text so user can retry later
 
         # Upsert resume data
-        result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == user_id))
+        result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == uid))
         resume_data = result.scalar_one_or_none()
 
         if not resume_data:
-            resume_data = ResumeData(user_id=user_id)
+            resume_data = ResumeData(user_id=uid)
             self.db.add(resume_data)
 
         resume_data.raw_text = text
@@ -54,7 +56,7 @@ class ResumeService:
         resume_data.insights = parsed.get("insights", {})
 
         # Update profile resume_url placeholder
-        profile_result = await self.db.execute(select(Profile).where(Profile.user_id == user_id))
+        profile_result = await self.db.execute(select(Profile).where(Profile.user_id == uid))
         profile = profile_result.scalar_one_or_none()
         if profile:
             profile.resume_url = f"uploaded:{file.filename}"
@@ -71,7 +73,7 @@ class ResumeService:
         }
 
     async def get_insights(self, user_id: str) -> dict:
-        result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == user_id))
+        result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == to_uuid(user_id)))
         resume_data = result.scalar_one_or_none()
         if not resume_data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No resume data found. Upload your resume first.")

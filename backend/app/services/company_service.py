@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from datetime import datetime, timedelta, timezone
@@ -7,6 +7,7 @@ from app.models.company import Company, CompanyAnalytics
 from app.models.interview_experience import InterviewExperience, InterviewQuestion
 from app.schemas.company import CompanyCreate, CompanyUpdate
 from app.utils.cache import ttl_cache
+from app.utils.helpers import to_uuid
 
 
 class CompanyService:
@@ -20,7 +21,7 @@ class CompanyService:
         if cached:
             return cached
 
-        query = select(Company).where(Company.is_active == True)
+        query = select(Company).where(Company.is_active.is_(True))
         if search:
             query = query.where(Company.name.ilike(f"%{search}%"))
         query = query.order_by(Company.name)
@@ -50,21 +51,22 @@ class CompanyService:
         if cached:
             return cached
 
-        result = await self.db.execute(select(Company).where(Company.id == company_id))
+        cid = to_uuid(company_id)
+        result = await self.db.execute(select(Company).where(Company.id == cid))
         company = result.scalar_one_or_none()
         if not company:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
         # Get analytics
         analytics_result = await self.db.execute(
-            select(CompanyAnalytics).where(CompanyAnalytics.company_id == company_id)
+            select(CompanyAnalytics).where(CompanyAnalytics.company_id == cid)
         )
         analytics = analytics_result.scalar_one_or_none()
 
         # Recent experiences
         exp_result = await self.db.execute(
             select(InterviewExperience)
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == cid)
             .order_by(InterviewExperience.interview_date.desc())
             .limit(20)
         )
@@ -78,7 +80,7 @@ class CompanyService:
                 func.count(InterviewQuestion.id).label("frequency"),
             )
             .join(InterviewExperience)
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == cid)
             .group_by(InterviewQuestion.question_text, InterviewQuestion.topic)
             .order_by(func.count(InterviewQuestion.id).desc())
             .limit(20)
@@ -93,7 +95,7 @@ class CompanyService:
                 InterviewQuestion.topic,
             )
             .join(InterviewQuestion)
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == cid)
             .order_by(InterviewExperience.round_type)
         )
         questions_by_round = {}
@@ -155,7 +157,8 @@ class CompanyService:
         return {"id": str(company.id), "name": company.name, "created_at": company.created_at.isoformat()}
 
     async def update_company(self, company_id: str, request: CompanyUpdate) -> dict:
-        result = await self.db.execute(select(Company).where(Company.id == company_id))
+        ucid = to_uuid(company_id)
+        result = await self.db.execute(select(Company).where(Company.id == ucid))
         company = result.scalar_one_or_none()
         if not company:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
@@ -172,23 +175,24 @@ class CompanyService:
 
     async def recompute_analytics(self, company_id: str):
         """Recompute company analytics — called after new experience submission."""
+        rcid = to_uuid(company_id)
         now = datetime.now(timezone.utc)
         ninety_days_ago = now - timedelta(days=90)
 
         # Total counts
         total_exp = await self.db.execute(
-            select(func.count(InterviewExperience.id)).where(InterviewExperience.company_id == company_id)
+            select(func.count(InterviewExperience.id)).where(InterviewExperience.company_id == rcid)
         )
         total_q = await self.db.execute(
             select(func.count(InterviewQuestion.id))
             .join(InterviewExperience)
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == rcid)
         )
 
         # Difficulty distribution
         diff_result = await self.db.execute(
             select(InterviewExperience.difficulty, func.count(InterviewExperience.id))
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == rcid)
             .group_by(InterviewExperience.difficulty)
         )
         difficulty_dist = {r[0]: r[1] for r in diff_result.all()}
@@ -196,7 +200,7 @@ class CompanyService:
         # Round distribution
         round_result = await self.db.execute(
             select(InterviewExperience.round_type, func.count(InterviewExperience.id))
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == rcid)
             .group_by(InterviewExperience.round_type)
         )
         round_dist = {r[0]: r[1] for r in round_result.all()}
@@ -204,7 +208,7 @@ class CompanyService:
         # Success rate
         success_result = await self.db.execute(
             select(func.count(InterviewExperience.id))
-            .where(InterviewExperience.company_id == company_id, InterviewExperience.outcome == "Selected")
+            .where(InterviewExperience.company_id == rcid, InterviewExperience.outcome == "Selected")
         )
         total_exp_count = total_exp.scalar() or 0
         success_count = success_result.scalar() or 0
@@ -214,20 +218,44 @@ class CompanyService:
         topic_result = await self.db.execute(
             select(InterviewQuestion.topic, func.count(InterviewQuestion.id).label("count"))
             .join(InterviewExperience)
-            .where(InterviewExperience.company_id == company_id)
+            .where(InterviewExperience.company_id == rcid)
             .group_by(InterviewQuestion.topic)
             .order_by(func.count(InterviewQuestion.id).desc())
             .limit(10)
         )
         top_topics = [{"topic": r[0], "count": r[1]} for r in topic_result.all()]
 
+        # Compute recent_90d_weight: ratio of recent (90d) experiences to total
+        recent_exp_result = await self.db.execute(
+            select(func.count(InterviewExperience.id)).where(
+                InterviewExperience.company_id == rcid,
+                InterviewExperience.interview_date >= ninety_days_ago.date(),
+            )
+        )
+        recent_exp_count = recent_exp_result.scalar() or 0
+        recent_90d_weight = round(recent_exp_count / total_exp_count, 2) if total_exp_count > 0 else 0.0
+
+        # Compute common_weaknesses from questions students couldn't answer
+        weakness_result = await self.db.execute(
+            select(InterviewQuestion.topic, func.count(InterviewQuestion.id).label("cnt"))
+            .join(InterviewExperience)
+            .where(
+                InterviewExperience.company_id == rcid,
+                InterviewQuestion.could_answer.in_(["No", "Partially"]),
+            )
+            .group_by(InterviewQuestion.topic)
+            .order_by(func.count(InterviewQuestion.id).desc())
+            .limit(5)
+        )
+        common_weaknesses = [r[0] for r in weakness_result.all()]
+
         # Upsert analytics
         analytics_result = await self.db.execute(
-            select(CompanyAnalytics).where(CompanyAnalytics.company_id == company_id)
+            select(CompanyAnalytics).where(CompanyAnalytics.company_id == rcid)
         )
         analytics = analytics_result.scalar_one_or_none()
         if not analytics:
-            analytics = CompanyAnalytics(company_id=company_id)
+            analytics = CompanyAnalytics(company_id=rcid)
             self.db.add(analytics)
 
         analytics.total_experiences = total_exp_count
@@ -236,5 +264,10 @@ class CompanyService:
         analytics.difficulty_dist = difficulty_dist
         analytics.round_dist = round_dist
         analytics.success_rate = round(success_rate, 1)
+        analytics.common_weaknesses = common_weaknesses
+        analytics.recent_90d_weight = recent_90d_weight
         analytics.last_computed = now
         await self.db.flush()
+
+        # Invalidate company intelligence cache
+        ttl_cache.delete(f"company:intel:{company_id}")

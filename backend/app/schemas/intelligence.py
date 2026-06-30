@@ -1,10 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
 # --- Weakness ---
 class WeaknessResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     topic: str
     category: Optional[str] = None
@@ -16,12 +18,11 @@ class WeaknessResponse(BaseModel):
     first_detected: datetime
     last_detected: datetime
 
-    class Config:
-        from_attributes = True
-
 
 # --- Recommendation ---
 class RecommendationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     type: str
     title: str
@@ -30,9 +31,6 @@ class RecommendationResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     is_completed: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # --- Resume ---

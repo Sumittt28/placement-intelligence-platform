@@ -76,4 +76,7 @@ async def rate_limit_check(request: Request):
             headers={"Retry-After": str(max(retry_after, 1))},
         )
 
+    # Append and cap per-key list to prevent unbounded growth
     _requests[key].append(now)
+    if len(_requests[key]) > max_requests * 2:
+        _cleanup_old_entries(key, now)

@@ -15,7 +15,7 @@ class KnowledgeBaseService:
     ) -> dict:
         offset = (page - 1) * limit
 
-        # Base query: search in questions
+        # Base query: search in questions (search_type filters by topic category)
         base_query = (
             select(
                 InterviewQuestion.question_text,
@@ -39,6 +39,10 @@ class KnowledgeBaseService:
             )
         )
 
+        # Filter by search_type (topic category)
+        if search_type:
+            base_query = base_query.where(InterviewQuestion.topic.ilike(f"%{search_type}%"))
+
         # Additional filters
         if company:
             base_query = base_query.where(Company.name.ilike(f"%{company}%"))
@@ -57,7 +61,6 @@ class KnowledgeBaseService:
         ).order_by(func.count(InterviewQuestion.id).desc())
 
         # Count total
-        from sqlalchemy import text
         count_query = select(func.count()).select_from(base_query.subquery())
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0

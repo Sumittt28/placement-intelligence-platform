@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS interview_experiences (
     ai_extracted JSONB,
     is_approved BOOLEAN DEFAULT false,
     is_flagged BOOLEAN DEFAULT false,
+    flag_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

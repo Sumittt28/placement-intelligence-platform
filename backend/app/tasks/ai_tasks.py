@@ -5,6 +5,7 @@ These tasks are triggered after experience submissions, interview completions, e
 import asyncio
 import logging
 from app.worker import celery_app
+from app.utils.helpers import to_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,9 @@ def extract_experience_metadata(self, experience_id: str, questions: list, role:
             async with async_session_factory() as session:
                 await session.execute(
                     update(InterviewExperience)
-                    .where(InterviewExperience.id == experience_id)
+                    .where(InterviewExperience.id == to_uuid(experience_id))
                     .values(ai_extracted=metadata)
                 )
-                await session.commit()
 
             logger.info(f"Metadata extracted for experience {experience_id}: {list(metadata.keys())}")
             return metadata
@@ -89,13 +89,12 @@ def generate_question_embeddings(self, experience_id: str, questions: list):
                         if embedding:
                             await session.execute(
                                 update(InterviewQuestion)
-                                .where(InterviewQuestion.id == question_id)
+                                .where(InterviewQuestion.id == to_uuid(question_id))
                                 .values(embedding=embedding)
                             )
                     except Exception as e:
                         logger.warning(f"Embedding failed for question {question_id}: {e}")
 
-                await session.commit()
 
             logger.info(f"Embeddings generated for experience {experience_id}")
 
@@ -123,15 +122,16 @@ def detect_weaknesses_task(self, user_id: str, interview_id: str, evaluation_dat
 
             evaluator = Evaluator()
             weak_areas = await evaluator.detect_weaknesses(evaluation_data, "general")
+            uid = to_uuid(user_id)
 
             async with async_session_factory() as session:
                 for area in weak_areas:
                     # Check if weakness already exists for this user+topic
                     result = await session.execute(
                         select(Weakness).where(
-                            Weakness.user_id == user_id,
+                            Weakness.user_id == uid,
                             Weakness.topic == area["topic"],
-                            Weakness.is_resolved == False,  # noqa: E712
+                            Weakness.is_resolved.is_(False),
                         )
                     )
                     existing = result.scalar_one_or_none()
@@ -141,9 +141,8 @@ def detect_weaknesses_task(self, user_id: str, interview_id: str, evaluation_dat
                         existing.last_detected = __import__("datetime").datetime.now(
                             __import__("datetime").timezone.utc
                         )
-                        sources = existing.sources or []
-                        sources.append(interview_id)
-                        existing.sources = sources
+                        # Create new list to ensure SQLAlchemy JSONB change detection
+                        existing.sources = (existing.sources or []) + [interview_id]
                         # Update severity
                         if existing.occurrence_count >= 5:
                             existing.severity = "high"
@@ -151,7 +150,7 @@ def detect_weaknesses_task(self, user_id: str, interview_id: str, evaluation_dat
                             existing.severity = "medium"
                     else:
                         weakness = Weakness(
-                            user_id=user_id,
+                            user_id=uid,
                             topic=area["topic"],
                             category=area.get("category", "technical"),
                             occurrence_count=1,
@@ -164,7 +163,6 @@ def detect_weaknesses_task(self, user_id: str, interview_id: str, evaluation_dat
                         )
                         session.add(weakness)
 
-                await session.commit()
 
             logger.info(f"Weaknesses detected for user {user_id}: {[a['topic'] for a in weak_areas]}")
 
@@ -192,10 +190,12 @@ def regenerate_recommendations_task(self, user_id: str):
 
             engine = RecommendationEngine()
 
+            uid = to_uuid(user_id)
+
             async with async_session_factory() as session:
                 # Load resume data
                 res = await session.execute(
-                    select(ResumeData).where(ResumeData.user_id == user_id)
+                    select(ResumeData).where(ResumeData.user_id == uid)
                 )
                 resume = res.scalar_one_or_none()
                 resume_data = {}
@@ -208,8 +208,8 @@ def regenerate_recommendations_task(self, user_id: str):
                 # Load weaknesses
                 res = await session.execute(
                     select(Weakness).where(
-                        Weakness.user_id == user_id,
-                        Weakness.is_resolved == False,  # noqa: E712
+                        Weakness.user_id == uid,
+                        Weakness.is_resolved.is_(False),
                     )
                 )
                 weaknesses = [
@@ -226,22 +226,21 @@ def regenerate_recommendations_task(self, user_id: str):
                 # Delete old incomplete recommendations
                 await session.execute(
                     delete(Recommendation).where(
-                        Recommendation.user_id == user_id,
-                        Recommendation.is_completed == False,  # noqa: E712
+                        Recommendation.user_id == uid,
+                        Recommendation.is_completed.is_(False),
                     )
                 )
 
                 # Insert new ones
                 for rec in recs:
                     session.add(Recommendation(
-                        user_id=user_id,
+                        user_id=uid,
                         type=rec.get("type", "topic"),
                         title=rec.get("title", "Study recommendation"),
                         description=rec.get("description", ""),
                         priority=rec.get("priority", 50),
                     ))
 
-                await session.commit()
 
             logger.info(f"Recommendations regenerated for user {user_id}: {len(recs)} items")
 

@@ -118,6 +118,7 @@ export interface MockInterviewQuestion {
   question_text: string;
   question_type?: string;
   topic?: string;
+  student_answer?: string;
 }
 
 export interface MockInterview {

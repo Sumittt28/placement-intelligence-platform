@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,18 @@ export function InterviewChat({ interviewId, mode, initialMessages = [] }: Inter
   const [answer, setAnswer] = useState("");
   const [voiceMode, setVoiceMode] = useState(mode === "voice");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
 
   const answerMutation = useSubmitAnswer(interviewId);
   const completeMutation = useCompleteInterview(interviewId);
+
+  // Sync initialMessages when they change (e.g., after interview data loads from API)
+  useEffect(() => {
+    if (initialMessages.length > 0 && !initializedRef.current) {
+      initializedRef.current = true;
+      setMessages(initialMessages);
+    }
+  }, [initialMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,13 +59,13 @@ export function InterviewChat({ interviewId, mode, initialMessages = [] }: Inter
       { answer: currentAnswer },
       {
         onSuccess: (res) => {
-          const data = res.data.data;
+          const data = res.data.data as { is_complete: boolean; question?: { question_text: string; topic?: string } | null } | null;
           if (data?.is_complete) {
             toast.info("Interview complete! Getting your evaluation...");
           } else if (data?.question) {
             setMessages((prev) => [
               ...prev,
-              { role: "ai", content: data.question.question_text, topic: data.question.topic },
+              { role: "ai", content: data.question!.question_text, topic: data.question!.topic },
             ]);
           }
         },
@@ -65,9 +74,9 @@ export function InterviewChat({ interviewId, mode, initialMessages = [] }: Inter
     );
   };
 
-  const handleVoiceTranscript = (text: string) => {
+  const handleVoiceTranscript = useCallback((text: string) => {
     setAnswer(text);
-  };
+  }, []);
 
   const handleComplete = () => {
     completeMutation.mutate(undefined, {

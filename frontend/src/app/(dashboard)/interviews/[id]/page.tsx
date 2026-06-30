@@ -31,13 +31,20 @@ export default function InterviewSessionPage() {
 
   // Build initial messages from existing questions or current question
   const initialMessages: { role: "ai" | "user"; content: string; topic?: string }[] = [];
-  if (interview?.questions) {
+  if (interview?.questions && interview.questions.length > 0) {
     for (const q of interview.questions) {
       initialMessages.push({
         role: "ai",
         content: q.question_text,
         topic: q.topic || undefined,
       });
+      // Show student's previous answer if available
+      if (q.student_answer) {
+        initialMessages.push({
+          role: "user",
+          content: q.student_answer,
+        });
+      }
     }
   } else if (currentQuestion) {
     initialMessages.push({

@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { authAPI } from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
-import { supabaseAuth } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const registerSchema = z.object({
@@ -22,7 +21,7 @@ const registerSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   kalvium_id: z.string().optional(),
   batch: z.string().optional(),
-  graduation_year: z.string().optional(),
+  graduation_year: z.union([z.string(), z.number()]).optional(),
 });
 
 type RegisterForm = z.infer<typeof registerSchema>;
@@ -43,7 +42,7 @@ export default function RegisterPage() {
         ...data,
         kalvium_id: data.kalvium_id || undefined,
         batch: data.batch || undefined,
-        graduation_year: data.graduation_year ? Number(data.graduation_year) : undefined,
+        graduation_year: data.graduation_year && !isNaN(Number(data.graduation_year)) ? Number(data.graduation_year) : undefined,
       };
       const res = await authAPI.register(payload);
       const { access_token, user } = res.data.data as { access_token: string; user: { id: string; email: string; full_name: string; role: string } };

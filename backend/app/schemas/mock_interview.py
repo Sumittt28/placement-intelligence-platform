@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -31,14 +31,13 @@ class SubmitAnswerRequest(BaseModel):
 
 
 class InterviewQuestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     sequence_num: int
     question_text: str
     question_type: Optional[str] = None
     topic: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class NextQuestionResponse(BaseModel):
@@ -53,6 +52,8 @@ class StartInterviewResponse(BaseModel):
 
 
 class MockInterviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     interview_type: str
     difficulty: str
@@ -63,11 +64,10 @@ class MockInterviewResponse(BaseModel):
     completed_at: Optional[datetime] = None
     questions: List[InterviewQuestionResponse] = []
 
-    class Config:
-        from_attributes = True
-
 
 class ReplayQuestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     sequence_num: int
     question_text: str
@@ -78,9 +78,6 @@ class ReplayQuestionResponse(BaseModel):
     evaluation: Optional[Dict[str, Any]] = None
     feedback: Optional[str] = None
     audio_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ReplayResponse(BaseModel):

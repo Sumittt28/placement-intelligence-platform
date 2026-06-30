@@ -84,9 +84,17 @@ export function ExperienceDetail({ experience }: ExperienceDetailProps) {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {(experience.ai_extracted as Record<string, unknown>).topics &&
-                (experience.ai_extracted.topics as string[]).map((t: string, i: number) => (
+              {Array.isArray((experience.ai_extracted as Record<string, unknown>)?.topics) &&
+                ((experience.ai_extracted as Record<string, unknown>).topics as string[]).map((t: string, i: number) => (
                   <Badge key={i} variant="secondary">{t}</Badge>
+                ))}
+              {Array.isArray((experience.ai_extracted as Record<string, unknown>)?.skills) &&
+                ((experience.ai_extracted as Record<string, unknown>).skills as string[]).map((s: string, i: number) => (
+                  <Badge key={`s-${i}`} variant="outline">{s}</Badge>
+                ))}
+              {Array.isArray((experience.ai_extracted as Record<string, unknown>)?.technologies) &&
+                ((experience.ai_extracted as Record<string, unknown>).technologies as string[]).map((t: string, i: number) => (
+                  <Badge key={`t-${i}`} variant="outline">{t}</Badge>
                 ))}
             </div>
           </CardContent>

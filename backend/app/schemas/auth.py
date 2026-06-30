@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 
 
@@ -27,14 +27,13 @@ class TokenResponse(BaseModel):
 
 
 class UserBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     email: str
     full_name: str
     role: str
 
-    class Config:
-        from_attributes = True
 
-
-class RefreshRequest(BaseModel):
-    token: str
+# Resolve forward reference for TokenResponse
+TokenResponse.model_rebuild()

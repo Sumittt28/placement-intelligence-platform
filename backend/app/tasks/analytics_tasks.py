@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from app.worker import celery_app
+from app.utils.helpers import to_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,14 @@ def recompute_company_analytics(self, company_id: str):
             from app.models.interview_experience import InterviewExperience, InterviewQuestion
             from sqlalchemy import select, func
 
+            cid = to_uuid(company_id)
+
             async with async_session_factory() as session:
                 # Get all experiences for this company
                 result = await session.execute(
                     select(InterviewExperience).where(
-                        InterviewExperience.company_id == company_id,
-                        InterviewExperience.is_approved == True,  # noqa: E712
+                        InterviewExperience.company_id == cid,
+                        InterviewExperience.is_approved.is_(True),
                     )
                 )
                 experiences = result.scalars().all()
@@ -116,7 +119,7 @@ def recompute_company_analytics(self, company_id: str):
 
                 # Upsert analytics
                 result = await session.execute(
-                    select(CompanyAnalytics).where(CompanyAnalytics.company_id == company_id)
+                    select(CompanyAnalytics).where(CompanyAnalytics.company_id == cid)
                 )
                 analytics = result.scalar_one_or_none()
 
@@ -133,7 +136,7 @@ def recompute_company_analytics(self, company_id: str):
                     analytics.updated_at = now
                 else:
                     analytics = CompanyAnalytics(
-                        company_id=company_id,
+                        company_id=cid,
                         total_experiences=total_experiences,
                         total_questions=total_questions,
                         top_topics=top_topics,
@@ -145,8 +148,6 @@ def recompute_company_analytics(self, company_id: str):
                         last_computed=now,
                     )
                     session.add(analytics)
-
-                await session.commit()
 
             logger.info(
                 f"Analytics recomputed for company {company_id}: "
@@ -170,7 +171,7 @@ def recompute_all_company_analytics():
         from sqlalchemy import select
 
         async with async_session_factory() as session:
-            result = await session.execute(select(Company.id).where(Company.is_active == True))  # noqa: E712
+            result = await session.execute(select(Company.id).where(Company.is_active.is_(True)))
             company_ids = [str(row[0]) for row in result.all()]
 
         for cid in company_ids:

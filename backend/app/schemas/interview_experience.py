@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from enum import Enum
@@ -39,15 +39,14 @@ class QuestionCreate(BaseModel):
 
 
 class QuestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     topic: str
     question_text: str
     could_answer: str
     ai_tags: Optional[Dict[str, Any]] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ExperienceCreate(BaseModel):
@@ -62,6 +61,8 @@ class ExperienceCreate(BaseModel):
 
 
 class ExperienceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     company_id: str
@@ -76,9 +77,6 @@ class ExperienceResponse(BaseModel):
     is_approved: bool
     questions: List[QuestionResponse] = []
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ExperienceListResponse(BaseModel):

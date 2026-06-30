@@ -19,7 +19,8 @@ class VoiceEngine(BaseAIService):
 
     async def generate(self, prompt: str, context: dict = None) -> Any:
         """BaseAIService interface — synthesize text to speech."""
-        return await self.synthesize(prompt)
+        audio = await self.synthesize(prompt)
+        return {"audio_base64": audio}
 
     @classmethod
     def _get_whisper_model(cls):

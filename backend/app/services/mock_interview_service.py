@@ -1,4 +1,3 @@
-import uuid
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -12,6 +11,7 @@ from app.models.company import CompanyAnalytics
 from app.schemas.mock_interview import StartInterviewRequest, SubmitAnswerRequest
 from app.schemas.evaluation import EvaluationResponse
 from app.utils.cache import ttl_cache
+from app.utils.helpers import to_uuid
 
 logger = logging.getLogger("pip.interviews")
 
@@ -21,23 +21,11 @@ class MockInterviewService:
         self.db = db
 
     async def start_interview(self, user_id: str, request: StartInterviewRequest) -> dict:
+        uid = to_uuid(user_id)
         # Load context: resume + company analytics + past weaknesses
-        context = await self._build_context(user_id, request.company_id)
+        context = await self._build_context(uid, request.company_id)
 
-        # Create interview
-        interview = MockInterview(
-            user_id=user_id,
-            company_id=request.company_id,
-            interview_type=request.interview_type.value,
-            difficulty=request.difficulty,
-            mode=request.mode.value,
-            status="in_progress",
-            context=context,
-        )
-        self.db.add(interview)
-        await self.db.flush()
-
-        # Generate first question
+        # Generate first question BEFORE creating DB records (prevents orphaned interviews on AI failure)
         from app.services.ai.interview_generator import InterviewGenerator
         generator = InterviewGenerator()
         first_q = await generator.generate_question(
@@ -46,6 +34,19 @@ class MockInterviewService:
             difficulty=request.difficulty,
             previous_questions=[],
         )
+
+        # Create interview
+        interview = MockInterview(
+            user_id=uid,
+            company_id=to_uuid(request.company_id) if request.company_id else None,
+            interview_type=request.interview_type.value,
+            difficulty=request.difficulty,
+            mode=request.mode.value,
+            status="in_progress",
+            context=context,
+        )
+        self.db.add(interview)
+        await self.db.flush()
 
         question = MockInterviewQuestion(
             interview_id=interview.id,
@@ -70,10 +71,11 @@ class MockInterviewService:
 
     async def submit_answer(self, interview_id: str, user_id: str, request: SubmitAnswerRequest) -> dict:
         # Get interview
+        uid = to_uuid(user_id)
         result = await self.db.execute(
             select(MockInterview)
             .options(selectinload(MockInterview.questions))
-            .where(MockInterview.id == interview_id, MockInterview.user_id == user_id)
+            .where(MockInterview.id == to_uuid(interview_id), MockInterview.user_id == uid)
         )
         interview = result.scalar_one_or_none()
         if not interview or interview.status != "in_progress":
@@ -129,14 +131,17 @@ class MockInterviewService:
         }
 
     async def complete_interview(self, interview_id: str, user_id: str) -> dict:
+        uid = to_uuid(user_id)
         result = await self.db.execute(
             select(MockInterview)
             .options(selectinload(MockInterview.questions))
-            .where(MockInterview.id == interview_id, MockInterview.user_id == user_id)
+            .where(MockInterview.id == to_uuid(interview_id), MockInterview.user_id == uid)
         )
         interview = result.scalar_one_or_none()
         if not interview:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+        if interview.status == "completed":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview already completed")
 
         interview.status = "completed"
         interview.completed_at = datetime.now(timezone.utc)
@@ -176,19 +181,22 @@ class MockInterviewService:
         )
         self.db.add(evaluation)
 
-        # Generate ideal answers in parallel (with timeout protection)
+        # Generate ideal answers with concurrency limit (max 3 concurrent to avoid API rate limits)
         try:
             questions_needing_ideals = [q for q in interview.questions if q.student_answer]
             if questions_needing_ideals:
+                semaphore = asyncio.Semaphore(3)
+
                 async def _gen_ideal(q):
-                    try:
-                        return q, await evaluator.generate_ideal_answer(q.question_text, interview.interview_type)
-                    except Exception:
-                        return q, None
+                    async with semaphore:
+                        try:
+                            return q, await evaluator.generate_ideal_answer(q.question_text, interview.interview_type)
+                        except Exception:
+                            return q, None
 
                 results = await asyncio.wait_for(
                     asyncio.gather(*[_gen_ideal(q) for q in questions_needing_ideals]),
-                    timeout=60,  # Total timeout for all ideal answers
+                    timeout=90,  # Total timeout for all ideal answers
                 )
                 for q, ideal in results:
                     if ideal:
@@ -202,7 +210,7 @@ class MockInterviewService:
 
         # Detect weaknesses
         try:
-            await self._detect_weaknesses(user_id, interview.id, eval_data)
+            await self._detect_weaknesses(uid, interview.id, eval_data)
         except Exception:
             pass
 
@@ -213,9 +221,10 @@ class MockInterviewService:
         return EvaluationResponse.from_db(evaluation).model_dump()
 
     async def list_interviews(self, user_id: str) -> list:
+        uid = to_uuid(user_id)
         result = await self.db.execute(
             select(MockInterview)
-            .where(MockInterview.user_id == user_id)
+            .where(MockInterview.user_id == uid)
             .order_by(MockInterview.created_at.desc())
         )
         interviews = result.scalars().all()
@@ -237,10 +246,10 @@ class MockInterviewService:
         query = (
             select(MockInterview)
             .options(selectinload(MockInterview.questions))
-            .where(MockInterview.id == interview_id)
+            .where(MockInterview.id == to_uuid(interview_id))
         )
         if user_id:
-            query = query.where(MockInterview.user_id == user_id)
+            query = query.where(MockInterview.user_id == to_uuid(user_id))
         result = await self.db.execute(query)
         interview = result.scalar_one_or_none()
         if not interview:
@@ -262,6 +271,7 @@ class MockInterviewService:
                     "question_text": q.question_text,
                     "question_type": q.question_type,
                     "topic": q.topic,
+                    "student_answer": q.student_answer,
                 }
                 for q in interview.questions
             ],
@@ -271,10 +281,10 @@ class MockInterviewService:
         query = (
             select(MockInterview)
             .options(selectinload(MockInterview.questions), selectinload(MockInterview.evaluation))
-            .where(MockInterview.id == interview_id)
+            .where(MockInterview.id == to_uuid(interview_id))
         )
         if user_id:
-            query = query.where(MockInterview.user_id == user_id)
+            query = query.where(MockInterview.user_id == to_uuid(user_id))
         result = await self.db.execute(query)
         interview = result.scalar_one_or_none()
         if not interview:
@@ -313,13 +323,14 @@ class MockInterviewService:
         }
 
     async def get_evaluation(self, interview_id: str, user_id: str = None) -> dict:
-        query = select(Evaluation).where(Evaluation.interview_id == interview_id)
+        iid = to_uuid(interview_id)
+        query = select(Evaluation).where(Evaluation.interview_id == iid)
         if user_id:
             # Join to verify ownership
             query = (
                 select(Evaluation)
                 .join(MockInterview, Evaluation.interview_id == MockInterview.id)
-                .where(Evaluation.interview_id == interview_id, MockInterview.user_id == user_id)
+                .where(Evaluation.interview_id == iid, MockInterview.user_id == to_uuid(user_id))
             )
         result = await self.db.execute(query)
         evaluation = result.scalar_one_or_none()
@@ -344,7 +355,7 @@ class MockInterviewService:
         # Company analytics
         if company_id:
             analytics_result = await self.db.execute(
-                select(CompanyAnalytics).where(CompanyAnalytics.company_id == company_id)
+                select(CompanyAnalytics).where(CompanyAnalytics.company_id == to_uuid(company_id))
             )
             analytics = analytics_result.scalar_one_or_none()
             if analytics:
@@ -356,7 +367,7 @@ class MockInterviewService:
 
         # Past weaknesses
         weakness_result = await self.db.execute(
-            select(Weakness).where(Weakness.user_id == user_id, Weakness.is_resolved == False)
+            select(Weakness).where(Weakness.user_id == user_id, Weakness.is_resolved.is_(False))
         )
         weaknesses = weakness_result.scalars().all()
         if weaknesses:
@@ -364,7 +375,7 @@ class MockInterviewService:
 
         return context
 
-    async def _detect_weaknesses(self, user_id: str, interview_id: str, eval_data: dict):
+    async def _detect_weaknesses(self, user_id, interview_id, eval_data: dict):
         """Detect recurring weaknesses from evaluation data."""
         weak_dimensions = []
         for dim_name in ["communication", "technical", "confidence", "problem_solving", "behavioral", "project"]:
@@ -377,7 +388,7 @@ class MockInterviewService:
                 select(Weakness).where(
                     Weakness.user_id == user_id,
                     Weakness.topic == dim,
-                    Weakness.is_resolved == False,
+                    Weakness.is_resolved.is_(False),
                 )
             )
             existing = result.scalar_one_or_none()
@@ -385,9 +396,8 @@ class MockInterviewService:
             if existing:
                 existing.occurrence_count += 1
                 existing.last_detected = datetime.now(timezone.utc)
-                sources = existing.sources or []
-                sources.append(str(interview_id))
-                existing.sources = sources
+                # Create new list to ensure SQLAlchemy JSONB change detection
+                existing.sources = (existing.sources or []) + [str(interview_id)]
                 # Update severity
                 if existing.occurrence_count >= 5:
                     existing.severity = "high"

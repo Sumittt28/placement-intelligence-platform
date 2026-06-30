@@ -1,4 +1,3 @@
-import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -6,6 +5,7 @@ from fastapi import HTTPException, status
 from app.models.interview_experience import InterviewExperience, InterviewQuestion, InterviewOutcome
 from app.models.company import Company
 from app.schemas.interview_experience import ExperienceCreate
+from app.utils.helpers import to_uuid
 
 
 class ExperienceService:
@@ -13,16 +13,18 @@ class ExperienceService:
         self.db = db
 
     async def create_experience(self, user_id: str, request: ExperienceCreate) -> dict:
+        uid = to_uuid(user_id)
+        cid = to_uuid(request.company_id)
         # Verify company exists
-        company_result = await self.db.execute(select(Company).where(Company.id == request.company_id))
+        company_result = await self.db.execute(select(Company).where(Company.id == cid))
         company = company_result.scalar_one_or_none()
         if not company:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
         # Create experience
         experience = InterviewExperience(
-            user_id=user_id,
-            company_id=request.company_id,
+            user_id=uid,
+            company_id=cid,
             role=request.role,
             interview_date=request.interview_date,
             round_type=request.round_type.value,
@@ -50,7 +52,7 @@ class ExperienceService:
         is_success = request.outcome.value == "Selected"
         outcome = InterviewOutcome(
             experience_id=experience.id,
-            company_id=request.company_id,
+            company_id=cid,
             success=is_success,
             topics=[q.topic for q in request.questions],
         )
@@ -72,7 +74,7 @@ class ExperienceService:
         try:
             from app.services.company_service import CompanyService
             company_svc = CompanyService(self.db)
-            await company_svc.recompute_analytics(request.company_id)
+            await company_svc.recompute_analytics(str(cid))
         except Exception:
             pass
 
@@ -86,17 +88,21 @@ class ExperienceService:
         return await self._serialize_experience(experience)
 
     async def list_experiences(self, user_id: str, page: int, limit: int) -> dict:
+        uid = to_uuid(user_id)
         offset = (page - 1) * limit
 
         total_result = await self.db.execute(
-            select(func.count(InterviewExperience.id)).where(InterviewExperience.user_id == user_id)
+            select(func.count(InterviewExperience.id)).where(InterviewExperience.user_id == uid)
         )
         total = total_result.scalar() or 0
 
         result = await self.db.execute(
             select(InterviewExperience)
-            .options(selectinload(InterviewExperience.questions))
-            .where(InterviewExperience.user_id == user_id)
+            .options(
+                selectinload(InterviewExperience.questions),
+                selectinload(InterviewExperience.company),
+            )
+            .where(InterviewExperience.user_id == uid)
             .order_by(InterviewExperience.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -104,7 +110,7 @@ class ExperienceService:
         experiences = result.scalars().all()
 
         return {
-            "experiences": [await self._serialize_experience(e) for e in experiences],
+            "experiences": [self._serialize_experience_eager(e) for e in experiences],
             "total": total,
             "page": page,
             "limit": limit,
@@ -114,18 +120,50 @@ class ExperienceService:
         result = await self.db.execute(
             select(InterviewExperience)
             .options(selectinload(InterviewExperience.questions))
-            .where(InterviewExperience.id == experience_id)
+            .where(InterviewExperience.id == to_uuid(experience_id))
         )
         experience = result.scalar_one_or_none()
         if not experience:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experience not found")
         return await self._serialize_experience(experience)
 
+    async def update_experience(self, experience_id: str, user_id: str, request: ExperienceCreate) -> dict:
+        """Update an existing experience (owner only)."""
+        eid = to_uuid(experience_id)
+        uid = to_uuid(user_id)
+        result = await self.db.execute(
+            select(InterviewExperience)
+            .options(selectinload(InterviewExperience.questions))
+            .where(InterviewExperience.id == eid, InterviewExperience.user_id == uid)
+        )
+        experience = result.scalar_one_or_none()
+        if not experience:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experience not found")
+
+        # Update fields
+        experience.company_id = to_uuid(request.company_id)
+        experience.role = request.role
+        experience.interview_date = request.interview_date
+        experience.round_type = request.round_type.value
+        experience.difficulty = request.difficulty.value
+        experience.outcome = request.outcome.value
+        experience.student_notes = request.student_notes
+        await self.db.flush()
+
+        # Re-fetch with eager loading
+        result = await self.db.execute(
+            select(InterviewExperience)
+            .options(selectinload(InterviewExperience.questions))
+            .where(InterviewExperience.id == eid)
+        )
+        experience = result.scalar_one()
+        return await self._serialize_experience(experience)
+
     async def delete_experience(self, experience_id: str, user_id: str):
         result = await self.db.execute(
             select(InterviewExperience).where(
-                InterviewExperience.id == experience_id,
-                InterviewExperience.user_id == user_id,
+                InterviewExperience.id == to_uuid(experience_id),
+                InterviewExperience.user_id == to_uuid(user_id),
             )
         )
         experience = result.scalar_one_or_none()
@@ -135,17 +173,20 @@ class ExperienceService:
 
     async def list_all_experiences(self, status_filter: str = None) -> list:
         """Admin: list all experiences."""
-        query = select(InterviewExperience).options(selectinload(InterviewExperience.questions))
+        query = select(InterviewExperience).options(
+            selectinload(InterviewExperience.questions),
+            selectinload(InterviewExperience.company),
+        )
         if status_filter == "flagged":
-            query = query.where(InterviewExperience.is_flagged == True)
+            query = query.where(InterviewExperience.is_flagged.is_(True))
         elif status_filter == "pending":
-            query = query.where(InterviewExperience.is_approved == False)
+            query = query.where(InterviewExperience.is_approved.is_(False))
         query = query.order_by(InterviewExperience.created_at.desc())
         result = await self.db.execute(query)
-        return [await self._serialize_experience(e) for e in result.scalars().all()]
+        return [self._serialize_experience_eager(e) for e in result.scalars().all()]
 
     async def approve_experience(self, exp_id: str) -> dict:
-        result = await self.db.execute(select(InterviewExperience).where(InterviewExperience.id == exp_id))
+        result = await self.db.execute(select(InterviewExperience).where(InterviewExperience.id == to_uuid(exp_id)))
         exp = result.scalar_one_or_none()
         if not exp:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experience not found")
@@ -155,13 +196,48 @@ class ExperienceService:
         return {"id": str(exp.id), "approved": True}
 
     async def flag_experience(self, exp_id: str, reason: str) -> dict:
-        result = await self.db.execute(select(InterviewExperience).where(InterviewExperience.id == exp_id))
+        result = await self.db.execute(select(InterviewExperience).where(InterviewExperience.id == to_uuid(exp_id)))
         exp = result.scalar_one_or_none()
         if not exp:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experience not found")
         exp.is_flagged = True
+        exp.flag_reason = reason
         await self.db.flush()
         return {"id": str(exp.id), "flagged": True, "reason": reason}
+
+    def _serialize_experience_eager(self, exp: InterviewExperience) -> dict:
+        """Serialize with eagerly-loaded company relationship (no extra queries)."""
+        company_name = exp.company.name if exp.company else None
+        questions = []
+        try:
+            for q in exp.questions:
+                questions.append({
+                    "id": str(q.id),
+                    "topic": q.topic,
+                    "question_text": q.question_text,
+                    "could_answer": q.could_answer,
+                    "ai_tags": q.ai_tags,
+                    "created_at": q.created_at.isoformat() if q.created_at else None,
+                })
+        except Exception:
+            pass
+
+        return {
+            "id": str(exp.id),
+            "user_id": str(exp.user_id),
+            "company_id": str(exp.company_id),
+            "company_name": company_name,
+            "role": exp.role,
+            "interview_date": exp.interview_date.isoformat() if exp.interview_date else None,
+            "round_type": exp.round_type,
+            "difficulty": exp.difficulty,
+            "outcome": exp.outcome,
+            "student_notes": exp.student_notes,
+            "ai_extracted": exp.ai_extracted,
+            "is_approved": exp.is_approved,
+            "questions": questions,
+            "created_at": exp.created_at.isoformat() if exp.created_at else None,
+        }
 
     async def _serialize_experience(self, exp: InterviewExperience) -> dict:
         # Get company name

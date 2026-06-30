@@ -27,17 +27,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!checked) return;
-    if (typeof window === "undefined") return;
-    const token = localStorage.getItem("token");
-    if (!token) { router.push("/login"); return; }
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
-      try {
-        const u = JSON.parse(userStr);
-        if (u.role !== "admin") router.push("/dashboard");
-      } catch { router.push("/login"); }
+    if (!isAuthenticated) {
+      router.push("/login");
+      return;
     }
-  }, [checked, router]);
+    if (user?.role !== "admin") {
+      router.push("/dashboard");
+    }
+  }, [checked, isAuthenticated, user, router]);
 
   if (!checked) {
     return (

@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { authAPI } from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
-import { supabaseAuth } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const loginSchema = z.object({

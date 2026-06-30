@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
 from app.models.intelligence import Recommendation, Weakness, ResumeData
+from app.utils.helpers import to_uuid
 
 
 class RecommendationService:
@@ -9,10 +10,11 @@ class RecommendationService:
         self.db = db
 
     async def get_recommendations(self, user_id: str) -> list:
+        uid = to_uuid(user_id)
         # Get existing recommendations
         result = await self.db.execute(
             select(Recommendation)
-            .where(Recommendation.user_id == user_id, Recommendation.is_completed == False)
+            .where(Recommendation.user_id == uid, Recommendation.is_completed.is_(False))
             .order_by(Recommendation.priority.desc())
         )
         existing = result.scalars().all()
@@ -21,18 +23,18 @@ class RecommendationService:
             return [self._serialize(r) for r in existing]
 
         # Auto-generate recommendations based on weaknesses
-        await self._generate_recommendations(user_id)
+        await self._generate_recommendations(uid)
 
         result = await self.db.execute(
             select(Recommendation)
-            .where(Recommendation.user_id == user_id, Recommendation.is_completed == False)
+            .where(Recommendation.user_id == uid, Recommendation.is_completed.is_(False))
             .order_by(Recommendation.priority.desc())
         )
         return [self._serialize(r) for r in result.scalars().all()]
 
     async def mark_complete(self, rec_id: str, user_id: str) -> dict:
         result = await self.db.execute(
-            select(Recommendation).where(Recommendation.id == rec_id, Recommendation.user_id == user_id)
+            select(Recommendation).where(Recommendation.id == to_uuid(rec_id), Recommendation.user_id == to_uuid(user_id))
         )
         rec = result.scalar_one_or_none()
         if not rec:
@@ -41,11 +43,11 @@ class RecommendationService:
         await self.db.flush()
         return {"id": str(rec.id), "completed": True}
 
-    async def _generate_recommendations(self, user_id: str):
+    async def _generate_recommendations(self, user_id):
         """Generate recommendations from weaknesses and resume data."""
         # Get weaknesses
         weakness_result = await self.db.execute(
-            select(Weakness).where(Weakness.user_id == user_id, Weakness.is_resolved == False)
+            select(Weakness).where(Weakness.user_id == user_id, Weakness.is_resolved.is_(False))
             .order_by(Weakness.occurrence_count.desc())
         )
         weaknesses = weakness_result.scalars().all()
@@ -65,7 +67,7 @@ class RecommendationService:
             from app.services.ai.recommendation_engine import RecommendationEngine
             try:
                 engine = RecommendationEngine()
-                resume_result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == user_id))
+                resume_result = await self.db.execute(select(ResumeData).where(ResumeData.user_id == user_id))  # already UUID
                 resume = resume_result.scalar_one_or_none()
                 if resume:
                     recs = await engine.generate_recommendations(

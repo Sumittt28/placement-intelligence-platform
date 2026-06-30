@@ -16,8 +16,8 @@ export function ResumeUpload() {
   const uploadMutation = useMutation({
     mutationFn: (file: File) => resumeAPI.upload(file),
     onSuccess: (res) => {
-      const data = res.data?.data;
-      const hasSkills = data?.skills?.length > 0 || data?.technologies?.length > 0;
+      const data = res.data?.data as { skills?: string[]; technologies?: string[] } | null;
+      const hasSkills = (data?.skills?.length ?? 0) > 0 || (data?.technologies?.length ?? 0) > 0;
       if (hasSkills) {
         toast.success("Resume uploaded and parsed successfully!");
       } else {

@@ -17,8 +17,12 @@ async def create_experience(
 ):
     service = ExperienceService(db)
     experience = await service.create_experience(current_user["sub"], request)
-    from app.middleware.activity_logger import log_activity
-    await log_activity(db, current_user["sub"], "experience_submitted", "experience", experience["id"])
+    # Log activity (best-effort — must not break experience submission)
+    try:
+        from app.middleware.activity_logger import log_activity
+        await log_activity(db, current_user["sub"], "experience_submitted", "experience", experience["id"])
+    except Exception:
+        pass
     return APIResponse(data=experience)
 
 
@@ -42,6 +46,18 @@ async def get_experience(
 ):
     service = ExperienceService(db)
     experience = await service.get_experience(experience_id)
+    return APIResponse(data=experience)
+
+
+@router.put("/{experience_id}", response_model=APIResponse)
+async def update_experience(
+    experience_id: str,
+    request: ExperienceCreate,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ExperienceService(db)
+    experience = await service.update_experience(experience_id, current_user["sub"], request)
     return APIResponse(data=experience)
 
 

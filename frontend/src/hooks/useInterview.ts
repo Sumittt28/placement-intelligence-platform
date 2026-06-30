@@ -36,7 +36,7 @@ export function useInterview(id: string) {
 
 export function useStartInterview() {
   const queryClient = useQueryClient();
-  const { setCurrentQuestion } = useInterviewStore();
+  const { startSession, setCurrentQuestion } = useInterviewStore();
 
   return useMutation({
     mutationFn: (data: {
@@ -45,10 +45,19 @@ export function useStartInterview() {
       company_id?: string;
       mode?: string;
     }) => interviewAPI.start(data),
-    onSuccess: (res) => {
-      const data = res.data.data;
-      if (data?.first_question) {
-        setCurrentQuestion(data.first_question);
+    onSuccess: (res, variables) => {
+      const data = res.data.data as { interview_id: string; first_question: { id: string; sequence_num: number; question_text: string; question_type?: string; topic?: string } } | null;
+      if (data) {
+        startSession({
+          interviewId: data.interview_id,
+          interviewType: variables.interview_type,
+          difficulty: variables.difficulty,
+          mode: (variables.mode || "text") as "text" | "voice",
+          companyId: variables.company_id,
+        });
+        if (data.first_question) {
+          setCurrentQuestion(data.first_question);
+        }
       }
       queryClient.invalidateQueries({ queryKey: ["interviews"] });
     },
@@ -62,7 +71,7 @@ export function useSubmitAnswer(interviewId: string) {
     mutationFn: (data: { answer: string; audio_url?: string }) =>
       interviewAPI.answer(interviewId, data),
     onSuccess: (res) => {
-      const data = res.data.data;
+      const data = res.data.data as { is_complete: boolean; question?: { id: string; sequence_num: number; question_text: string; question_type?: string; topic?: string } | null; message?: string | null } | null;
       if (data?.is_complete) {
         setComplete();
       } else if (data?.question) {
@@ -74,10 +83,12 @@ export function useSubmitAnswer(interviewId: string) {
 
 export function useCompleteInterview(interviewId: string) {
   const queryClient = useQueryClient();
+  const { resetSession } = useInterviewStore();
 
   return useMutation({
     mutationFn: () => interviewAPI.complete(interviewId),
     onSuccess: () => {
+      resetSession();
       queryClient.invalidateQueries({ queryKey: ["interviews"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["weaknesses"] });
