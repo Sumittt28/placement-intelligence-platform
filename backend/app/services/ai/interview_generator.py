@@ -38,7 +38,9 @@ Rules:
 Return JSON:
 {{"question": "Your interview question here", "topic": "topic category", "expected_depth": "brief|moderate|deep"}}
 """
-        result = await self.client.generate(prompt, temperature=0.7)
+        # use_fast_model=True: question generation is called 5-8x per interview,
+        # so we use the 8B model (14,400 req/day free) instead of the 70B (1,000 req/day).
+        result = await self.client.generate(prompt, temperature=0.7, use_fast_model=True)
 
         if "question" not in result:
             result = {

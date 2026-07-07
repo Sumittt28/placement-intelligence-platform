@@ -44,7 +44,9 @@ Analyze the last answer quality and decide:
 Return JSON:
 {{"question": "Your next question", "type": "follow_up or main", "topic": "topic category", "reasoning": "Why this question was chosen"}}
 """
-        result = await self.client.generate(prompt, temperature=0.7)
+        # use_fast_model=True: follow-up generation is called 5-8x per interview session.
+        # 8B model (14,400 req/day free) is fast enough for conversational question generation.
+        result = await self.client.generate(prompt, temperature=0.7, use_fast_model=True)
 
         if "question" not in result:
             result = {

@@ -29,7 +29,16 @@ services:
       # Auth — auto-generated secure secret
       - key: JWT_SECRET
         generateValue: true
-      # AI — set actual value in Render Dashboard
+      # AI Provider — Groq (primary)
+      - key: AI_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false   # Set this manually in Render Dashboard → Environment Variables
+      - key: GROQ_MODEL_SMART
+        value: llama-3.3-70b-versatile
+      - key: GROQ_MODEL_FAST
+        value: llama-3.1-8b-instant
+      # Gemini (legacy — no longer used)
       - key: GEMINI_API_KEY
         sync: false
       # Redis — set actual value in Render Dashboard (or leave empty to disable Celery)

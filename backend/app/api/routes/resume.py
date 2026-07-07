@@ -46,11 +46,9 @@ async def upload_resume(
             detail="Empty file uploaded.",
         )
 
-    # Reset file position so service can re-read
-    await file.seek(0)
-
+    # Pass already-read bytes directly — avoids unreliable seek() on multipart streams
     service = ResumeService(db)
-    result = await service.upload_and_parse(current_user["sub"], file)
+    result = await service.upload_and_parse(current_user["sub"], content, file.filename or "resume")
     return APIResponse(data=result)
 
 
